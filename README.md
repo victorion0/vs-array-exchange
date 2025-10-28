@@ -1,23 +1,20 @@
-# VS-Array-Exchange
+# VS Array Exchange API
 
-A Node.js + Express API that fetches country data, exchange rates, and estimates GDP values. Stores and manages the data in a MySQL database.  
-
----
+A Node.js + Express API to fetch, store, and display country data along with exchange rates and GDP estimates.
 
 ## Features
 
-- Fetches all countries from [REST Countries API](https://restcountries.com/)  
-- Retrieves USD exchange rates from [ExchangeRate API](https://open.er-api.com/)  
-- Calculates estimated GDP based on population and exchange rate  
-- CRUD operations on country data via RESTful endpoints  
-- Status endpoint to monitor total countries and last refresh  
-- CORS enabled for front-end integration  
+- Fetches country data from [REST Countries API](https://restcountries.com/).
+- Fetches USD exchange rates from [Open Exchange Rates API](https://open.er-api.com/).
+- Calculates estimated GDP for each country.
+- Stores data in MySQL database.
+- Generates a summary image of total countries and top 5 countries by GDP.
 
----
+## Endpoints
 
-## Installation
+### POST `/countries/refresh`
+Fetch and save all countries, update exchange rates, and calculate estimated GDP. Also generates a summary image.
 
-1. Clone the repository:  
-```bash
-git clone https://github.com/your-username/vs-array-exchange.git
-cd vs-array-exchange
+**Response:**
+```json
+{ "message": "Countries refreshed successfully" }
