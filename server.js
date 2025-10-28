@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Database connection
+// ================= Database =================
 const db = await mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -17,23 +17,21 @@ const db = await mysql.createPool({
   database: process.env.DB_NAME,
 });
 
-// ============= Helper Functions =============
-
-// Fetch all countries
+// ================= Helper Functions =================
 async function fetchCountries() {
-  const url = "https://restcountries.com/v2/all?fields=name,capital,region,population,flag,currencies";
+  const url =
+    "https://restcountries.com/v2/all?fields=name,capital,region,population,flag,currencies";
   const { data } = await axios.get(url);
   return data;
 }
 
-// Fetch exchange rates (USD base)
 async function fetchExchangeRates() {
   const url = "https://open.er-api.com/v6/latest/USD";
   const { data } = await axios.get(url);
   return data.rates;
 }
 
-// ============= ROUTES =============
+// ================= Routes =================
 
 // POST /countries/refresh
 app.post("/countries/refresh", async (req, res) => {
@@ -74,6 +72,7 @@ app.post("/countries/refresh", async (req, res) => {
     res.status(503).json({ error: "External data source unavailable" });
   }
 });
+console.log("✅ /countries/refresh route registered");
 
 // GET /countries
 app.get("/countries", async (req, res) => {
@@ -102,6 +101,7 @@ app.get("/countries", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+console.log("✅ /countries route registered");
 
 // GET /countries/:name
 app.get("/countries/:name", async (req, res) => {
@@ -118,6 +118,7 @@ app.get("/countries/:name", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+console.log("✅ /countries/:name route registered");
 
 // DELETE /countries/:name
 app.delete("/countries/:name", async (req, res) => {
@@ -134,6 +135,7 @@ app.delete("/countries/:name", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+console.log("✅ DELETE /countries/:name route registered");
 
 // GET /status
 app.get("/status", async (req, res) => {
@@ -151,13 +153,15 @@ app.get("/status", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+console.log("✅ /status route registered");
 
-// Fallback route
+// Fallback 404 route
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
 });
+console.log("✅ Fallback 404 route registered");
 
-// Start server
+// ================= Start Server =================
 app.listen(process.env.PORT, () =>
   console.log(`Server running on port ${process.env.PORT}`)
 );
