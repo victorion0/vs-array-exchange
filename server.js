@@ -13,26 +13,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Health Check
-app.get('/', (req, res) => {
-  console.log('Health check hit');
-  res.json({ 
-    status: 'API ALIVE!', 
+// ================== HEALTH CHECK ==================
+let db; // global pool reference
+
+app.get("/", (req, res) => {
+  console.log("Health check hit");
+  res.json({
+    status: "API ALIVE!",
     port: process.env.PORT,
-    time: new Date().toISOString()
+    db_connected: !!db,
+    time: new Date().toISOString(),
   });
 });
 
-// ================= Database =================
-let db;  // GLOBAL
-
-(async () => {
+// ================== DATABASE CONNECTION ==================
+async function connectToDatabase() {
   try {
-    console.log('Connecting to DB...');
-    console.log('Host:', process.env.MYSQLHOST || 'MISSING');
-    console.log('User:', process.env.MYSQLUSER || 'MISSING');
-    console.log('DB:', process.env.MYSQLDATABASE || 'MISSING');
-    
+    console.log("🔌 Attempting to connect to DB...");
+    console.log("Host:", process.env.MYSQLHOST || "MISSING");
+    console.log("User:", process.env.MYSQLUSER || "MISSING");
+    console.log("DB:", process.env.MYSQLDATABASE || "MISSING");
+
     db = await mysql.createPool({
       host: process.env.MYSQLHOST,
       user: process.env.MYSQLUSER,
@@ -41,19 +42,24 @@ let db;  // GLOBAL
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
     });
-    
-    const [result] = await db.query('SELECT 1 as test');
-    console.log('DB Test Query OK:', result[0].test);
-    console.log("Database connected");
-  } catch (err) {
-    console.error("Database connection failed:", err.message);
-    process.exit(1);
-  }
-})();
 
-// ================= Helper Functions =================
+    const [result] = await db.query("SELECT 1 as test");
+    console.log("✅ DB Test Query OK:", result[0].test);
+    console.log("✅ Database connected successfully!");
+  } catch (err) {
+    console.error("❌ Database connection failed:", err.message);
+    db = null;
+    console.log("⏳ Retrying DB connection in 5 seconds...");
+    setTimeout(connectToDatabase, 5000);
+  }
+}
+
+// Start connection (will retry if fails)
+connectToDatabase();
+
+// ================== HELPER FUNCTIONS ==================
 async function fetchCountries() {
   const url =
     "https://restcountries.com/v2/all?fields=name,capital,region,population,flag,currencies";
@@ -67,10 +73,14 @@ async function fetchExchangeRates() {
   return data.rates;
 }
 
-// ================= Image Generation =================
+// ================== IMAGE GENERATION ==================
 async function generateSummaryImage() {
   try {
-    console.log('Generating image...');
+    if (!db) {
+      console.warn("⚠️ Database not connected. Skipping image generation.");
+      return;
+    }
+
     const [countries] = await db.query(
       "SELECT name, estimated_gdp FROM countries ORDER BY estimated_gdp DESC LIMIT 5"
     );
@@ -104,22 +114,23 @@ async function generateSummaryImage() {
 
     ctx.fillText(`Last refreshed: ${lastRefreshed}`, 20, height - 40);
 
-    // Railway-friendly cache folder
     const cacheDir = path.join(process.cwd(), "cache");
     if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
     const outputPath = path.join(cacheDir, "summary.png");
     fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
-    console.log("Summary image generated at cache/summary.png");
+    console.log("🖼️ Summary image generated at cache/summary.png");
   } catch (err) {
     console.error("Error generating summary image:", err.message);
   }
 }
 
-// ================= Routes =================
+// ================== ROUTES ==================
 app.post("/countries/refresh", async (req, res) => {
-  console.log('Refresh started');
+  console.log("Refresh started");
   try {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+
     const countries = await fetchCountries();
     const rates = await fetchExchangeRates();
     console.log(`Fetched ${countries.length} countries, ${Object.keys(rates).length} rates`);
@@ -153,17 +164,18 @@ app.post("/countries/refresh", async (req, res) => {
     await db.query("INSERT INTO meta (last_refreshed_at) VALUES (NOW())");
     await generateSummaryImage();
 
-    console.log('Refresh completed');
+    console.log("✅ Refresh completed");
     res.json({ message: "Countries refreshed successfully" });
   } catch (err) {
-    console.error('Refresh error:', err.message);
+    console.error("Refresh error:", err.message);
     res.status(503).json({ error: "External data source unavailable", details: err.message });
   }
 });
-console.log("/countries/refresh route registered");
 
 app.get("/countries", async (req, res) => {
   try {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+
     let sql = "SELECT * FROM countries WHERE 1=1";
     const params = [];
 
@@ -184,30 +196,31 @@ app.get("/countries", async (req, res) => {
     const [rows] = await db.query(sql, params);
     res.json(rows);
   } catch (err) {
-    console.error('Countries error:', err.message);
+    console.error("Countries error:", err.message);
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
-console.log("/countries route registered");
 
 app.get("/countries/:name", async (req, res) => {
   try {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+
     const [rows] = await db.query(
       "SELECT * FROM countries WHERE LOWER(name) = LOWER(?)",
       [req.params.name]
     );
-    if (rows.length === 0)
-      return res.status(404).json({ error: "Country not found" });
+    if (rows.length === 0) return res.status(404).json({ error: "Country not found" });
     res.json(rows[0]);
   } catch (err) {
-    console.error('Single country error:', err.message);
+    console.error("Single country error:", err.message);
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
-console.log("/countries/:name route registered");
 
 app.delete("/countries/:name", async (req, res) => {
   try {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+
     const [result] = await db.query(
       "DELETE FROM countries WHERE LOWER(name) = LOWER(?)",
       [req.params.name]
@@ -216,60 +229,45 @@ app.delete("/countries/:name", async (req, res) => {
       return res.status(404).json({ error: "Country not found" });
     res.json({ message: "Country deleted" });
   } catch (err) {
-    console.error('Delete error:', err.message);
+    console.error("Delete error:", err.message);
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
-console.log("DELETE /countries/:name route registered");
 
 app.get("/status", async (req, res) => {
   try {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+
     const [count] = await db.query("SELECT COUNT(*) AS total FROM countries");
-    const [meta] = await db.query(
-      "SELECT last_refreshed_at FROM meta ORDER BY id DESC LIMIT 1"
-    );
+    const [meta] = await db.query("SELECT last_refreshed_at FROM meta ORDER BY id DESC LIMIT 1");
     res.json({
       total_countries: count[0].total,
       last_refreshed_at: meta[0]?.last_refreshed_at || null,
     });
   } catch (err) {
-    console.error('Status error:', err.message);
+    console.error("Status error:", err.message);
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
-console.log("/status route registered");
 
 app.get("/countries/image", (req, res) => {
   const imagePath = path.join(process.cwd(), "cache", "summary.png");
   if (fs.existsSync(imagePath)) {
     res.sendFile(imagePath);
   } else {
-    res.status(404).json({ error: "Summary image not found. Run /countries/refresh first." });
+    res.status(404).json({
+      error: "Summary image not found. Run /countries/refresh first.",
+    });
   }
 });
-console.log("/countries/image route registered");
 
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
 });
-console.log("Fallback 404 route registered");
 
-// ================= Start Server AFTER DB =================
+// ================== START SERVER ==================
 const PORT = process.env.PORT || 3000;
 
-(async () => {
-  try {
-    console.log('Waiting for DB...');
-    while (!db) {
-      await new Promise(r => setTimeout(r, 100));
-    }
-    console.log('DB ready! Starting server...');
-
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server LIVE on port ${PORT} — API READY!`);
-    });
-  } catch (err) {
-    console.error('Startup failed:', err);
-    process.exit(1);
-  }
-})();
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server LIVE on port ${PORT} — API READY!`);
+});
