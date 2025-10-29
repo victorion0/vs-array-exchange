@@ -13,20 +13,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ================== HEALTH CHECK ==================
-let db; // global pool reference
-
+// ================== INSTANT HEALTH CHECK (RAILWAY) ==================
 app.get("/", (req, res) => {
-  console.log("Health check hit");
+  res.status(200).json({ status: "API ALIVE!", port: process.env.PORT });
+});
+
+// ================== DETAILED HEALTH (DB STATUS) ==================
+app.get("/health", (req, res) => {
   res.json({
-    status: "API ALIVE!",
-    port: process.env.PORT,
+    status: "OK",
     db_connected: !!db,
     time: new Date().toISOString(),
   });
 });
 
-// ================== DATABASE CONNECTION ==================
+// ================== DATABASE CONNECTION WITH RETRY ==================
+let db; // global pool
+
 async function connectToDatabase() {
   try {
     console.log("Attempting to connect to DB...");
@@ -56,7 +59,7 @@ async function connectToDatabase() {
   }
 }
 
-// Start connection (will retry if fails)
+// Start connection (will retry)
 connectToDatabase();
 
 // ================== HELPER FUNCTIONS ==================
@@ -271,7 +274,6 @@ const PORT = process.env.PORT || 3000;
 (async () => {
   console.log("Waiting for database connection before starting server...");
 
-  // Wait until db is ready
   while (!db) {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
