@@ -13,7 +13,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ================= Health Check =================
+// Health Check
 app.get('/', (req, res) => {
   res.json({ 
     status: 'API ALIVE!', 
@@ -22,20 +22,28 @@ app.get('/', (req, res) => {
   });
 });
 
-// ================= Database =================
+// Database with TIMEOUTS for Railway
 let db;
 
 (async () => {
   try {
     db = await mysql.createPool({
-  host: process.env.MYSQLHOST,
-  user: process.env.MYSQLUSER,
-  password: process.env.MYSQLPASSWORD,
-  database: process.env.MYSQLDATABASE,
-});
-    console.log("Database connected");
+      host: process.env.MYSQLHOST,
+      user: process.env.MYSQLUSER,
+      password: process.env.MYSQLPASSWORD,
+      database: process.env.MYSQLDATABASE,
+      connectTimeout: 60000,  // 60s timeout
+      acquireTimeout: 60000,
+      timeout: 60000,
+      socketTimeout: 60000,
+      requestTimeout: 60000,
+      keepAliveInitialDelay: 0,
+      enableKeepAlive: true,
+      connectTimeout: 10000,  // Initial connect 10s
+    });
+    console.log("✅ Database connected");
   } catch (err) {
-    console.error("Database connection failed:", err);
+    console.error("❌ Database connection failed:", err);
     process.exit(1); // stop server if DB fails
   }
 })();
@@ -96,9 +104,9 @@ async function generateSummaryImage() {
 
     const outputPath = path.join(cacheDir, "summary.png");
     fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
-    console.log("Summary image generated at cache/summary.png");
+    console.log("✅ Summary image generated at cache/summary.png");
   } catch (err) {
-    console.error("Error generating summary image:", err);
+    console.error("❌ Error generating summary image:", err);
   }
 }
 
@@ -143,7 +151,7 @@ app.post("/countries/refresh", async (req, res) => {
     res.status(503).json({ error: "External data source unavailable" });
   }
 });
-console.log("/countries/refresh route registered");
+console.log("✅ /countries/refresh route registered");
 
 app.get("/countries", async (req, res) => {
   try {
@@ -171,7 +179,7 @@ app.get("/countries", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-console.log("/countries route registered");
+console.log("✅ /countries route registered");
 
 app.get("/countries/:name", async (req, res) => {
   try {
@@ -187,7 +195,7 @@ app.get("/countries/:name", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-console.log("/countries/:name route registered");
+console.log("✅ /countries/:name route registered");
 
 app.delete("/countries/:name", async (req, res) => {
   try {
@@ -203,7 +211,7 @@ app.delete("/countries/:name", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-console.log("DELETE /countries/:name route registered");
+console.log("✅ DELETE /countries/:name route registered");
 
 app.get("/status", async (req, res) => {
   try {
@@ -220,7 +228,7 @@ app.get("/status", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-console.log("/status route registered");
+console.log("✅ /status route registered");
 
 app.get("/countries/image", (req, res) => {
   const imagePath = path.join(process.cwd(), "cache", "summary.png");
@@ -230,13 +238,13 @@ app.get("/countries/image", (req, res) => {
     res.status(404).json({ error: "Summary image not found. Run /countries/refresh first." });
   }
 });
-console.log("/countries/image route registered");
+console.log("✅ /countries/image route registered");
 
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
 });
-console.log("Fallback 404 route registered");
+console.log("✅ Fallback 404 route registered");
 
-// ================= Start Server =================
+// Start Server with BIND TO 0.0.0.0 for Railway
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
