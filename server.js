@@ -29,7 +29,7 @@ app.get("/", (req, res) => {
 // ================== DATABASE CONNECTION ==================
 async function connectToDatabase() {
   try {
-    console.log("🔌 Attempting to connect to DB...");
+    console.log("Attempting to connect to DB...");
     console.log("Host:", process.env.MYSQLHOST || "MISSING");
     console.log("User:", process.env.MYSQLUSER || "MISSING");
     console.log("DB:", process.env.MYSQLDATABASE || "MISSING");
@@ -46,12 +46,12 @@ async function connectToDatabase() {
     });
 
     const [result] = await db.query("SELECT 1 as test");
-    console.log("✅ DB Test Query OK:", result[0].test);
-    console.log("✅ Database connected successfully!");
+    console.log("DB Test Query OK:", result[0].test);
+    console.log("Database connected successfully!");
   } catch (err) {
-    console.error("❌ Database connection failed:", err.message);
+    console.error("Database connection failed:", err.message);
     db = null;
-    console.log("⏳ Retrying DB connection in 5 seconds...");
+    console.log("Retrying DB connection in 5 seconds...");
     setTimeout(connectToDatabase, 5000);
   }
 }
@@ -77,7 +77,7 @@ async function fetchExchangeRates() {
 async function generateSummaryImage() {
   try {
     if (!db) {
-      console.warn("⚠️ Database not connected. Skipping image generation.");
+      console.warn("Database not connected. Skipping image generation.");
       return;
     }
 
@@ -119,7 +119,7 @@ async function generateSummaryImage() {
 
     const outputPath = path.join(cacheDir, "summary.png");
     fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
-    console.log("🖼️ Summary image generated at cache/summary.png");
+    console.log("Summary image generated at cache/summary.png");
   } catch (err) {
     console.error("Error generating summary image:", err.message);
   }
@@ -164,7 +164,7 @@ app.post("/countries/refresh", async (req, res) => {
     await db.query("INSERT INTO meta (last_refreshed_at) VALUES (NOW())");
     await generateSummaryImage();
 
-    console.log("✅ Refresh completed");
+    console.log("Refresh completed");
     res.json({ message: "Countries refreshed successfully" });
   } catch (err) {
     console.error("Refresh error:", err.message);
@@ -265,9 +265,18 @@ app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
 });
 
-// ================== START SERVER ==================
+// ================== START SERVER AFTER DB IS READY ==================
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server LIVE on port ${PORT} — API READY!`);
-});
+(async () => {
+  console.log("Waiting for database connection before starting server...");
+
+  // Wait until db is ready
+  while (!db) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`SERVER LIVE on port ${PORT} — API READY!`);
+  });
+})();
