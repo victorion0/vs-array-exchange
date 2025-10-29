@@ -13,8 +13,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Health Check
+// LOG ALL REQUESTS (CRITICAL FOR DEBUG)
+app.use((req, res, next) => {
+  console.log(`REQUEST: ${req.method} ${req.path}`);
+  next();
+});
+
+// Health Check (TEST THIS FIRST)
 app.get('/', (req, res) => {
+  console.log('Health check hit');
   res.json({ 
     status: 'API ALIVE!', 
     port: process.env.PORT,
@@ -22,29 +29,38 @@ app.get('/', (req, res) => {
   });
 });
 
-// Database with TIMEOUTS for Railway
+// Database with RAILWAY SSL + VALID OPTIONS
 let db;
 
 (async () => {
   try {
+    console.log('Connecting to DB...');
+    console.log('Host:', process.env.MYSQLHOST || 'MISSING');
+    console.log('User:', process.env.MYSQLUSER || 'MISSING');
+    console.log('DB:', process.env.MYSQLDATABASE || 'MISSING');
+    
     db = await mysql.createPool({
       host: process.env.MYSQLHOST,
       user: process.env.MYSQLUSER,
       password: process.env.MYSQLPASSWORD,
       database: process.env.MYSQLDATABASE,
-      connectTimeout: 60000,  // 60s timeout
-      acquireTimeout: 60000,
-      timeout: 60000,
-      socketTimeout: 60000,
-      requestTimeout: 60000,
-      keepAliveInitialDelay: 0,
-      enableKeepAlive: true,
-      connectTimeout: 10000,  // Initial connect 10s
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      // NO INVALID OPTIONS — NO WARNINGS
+      // SSL for Railway public networking
+      ssl: {
+        rejectUnauthorized: false
+      }
     });
+    
+    // TEST DB WITH SIMPLE QUERY
+    const [result] = await db.query('SELECT 1 as test');
+    console.log('DB Test Query OK:', result[0].test);
     console.log("✅ Database connected");
   } catch (err) {
-    console.error("❌ Database connection failed:", err);
-    process.exit(1); // stop server if DB fails
+    console.error("❌ Database connection failed:", err.message);
+    process.exit(1);
   }
 })();
 
@@ -65,6 +81,7 @@ async function fetchExchangeRates() {
 // ================= Image Generation =================
 async function generateSummaryImage() {
   try {
+    console.log('Generating image...');
     const [countries] = await db.query(
       "SELECT name, estimated_gdp FROM countries ORDER BY estimated_gdp DESC LIMIT 5"
     );
@@ -106,15 +123,17 @@ async function generateSummaryImage() {
     fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
     console.log("✅ Summary image generated at cache/summary.png");
   } catch (err) {
-    console.error("❌ Error generating summary image:", err);
+    console.error("❌ Error generating summary image:", err.message);
   }
 }
 
 // ================= Routes =================
 app.post("/countries/refresh", async (req, res) => {
+  console.log('Refresh started');
   try {
     const countries = await fetchCountries();
     const rates = await fetchExchangeRates();
+    console.log(`Fetched ${countries.length} countries, ${Object.keys(rates).length} rates`);
 
     for (const c of countries) {
       const currency = c.currencies?.[0]?.code || null;
@@ -145,10 +164,11 @@ app.post("/countries/refresh", async (req, res) => {
     await db.query("INSERT INTO meta (last_refreshed_at) VALUES (NOW())");
     await generateSummaryImage();
 
+    console.log('Refresh completed');
     res.json({ message: "Countries refreshed successfully" });
   } catch (err) {
-    console.error(err);
-    res.status(503).json({ error: "External data source unavailable" });
+    console.error('Refresh error:', err.message);
+    res.status(503).json({ error: "External data source unavailable", details: err.message });
   }
 });
 console.log("✅ /countries/refresh route registered");
@@ -175,8 +195,8 @@ app.get("/countries", async (req, res) => {
     const [rows] = await db.query(sql, params);
     res.json(rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Countries error:', err.message);
+    res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
 console.log("✅ /countries route registered");
@@ -191,8 +211,8 @@ app.get("/countries/:name", async (req, res) => {
       return res.status(404).json({ error: "Country not found" });
     res.json(rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Single country error:', err.message);
+    res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
 console.log("✅ /countries/:name route registered");
@@ -207,8 +227,8 @@ app.delete("/countries/:name", async (req, res) => {
       return res.status(404).json({ error: "Country not found" });
     res.json({ message: "Country deleted" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Delete error:', err.message);
+    res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
 console.log("✅ DELETE /countries/:name route registered");
@@ -224,8 +244,8 @@ app.get("/status", async (req, res) => {
       last_refreshed_at: meta[0]?.last_refreshed_at || null,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Status error:', err.message);
+    res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
 console.log("✅ /status route registered");
@@ -245,6 +265,6 @@ app.use((req, res) => {
 });
 console.log("✅ Fallback 404 route registered");
 
-// Start Server with BIND TO 0.0.0.0 for Railway
+// Start Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
