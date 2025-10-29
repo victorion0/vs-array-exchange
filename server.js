@@ -27,7 +27,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// ================== DATABASE CONNECTION WITH RETRY ==================
+// ================== DATABASE CONNECTION (ONE-TIME, NO RETRY) ==================
 let db; // global pool
 
 async function connectToDatabase() {
@@ -53,14 +53,11 @@ async function connectToDatabase() {
     console.log("Database connected successfully!");
   } catch (err) {
     console.error("Database connection failed:", err.message);
+    console.error("Check your .env variables (MYSQLHOST, MYSQLUSER, etc.)");
     db = null;
-    console.log("Retrying DB connection in 5 seconds...");
-    setTimeout(connectToDatabase, 5000);
+    process.exit(1); // Fail fast — no retry
   }
 }
-
-// Start connection (will retry)
-connectToDatabase();
 
 // ================== HELPER FUNCTIONS ==================
 async function fetchCountries() {
@@ -268,14 +265,17 @@ app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
 });
 
-// ================== START SERVER AFTER DB IS READY ==================
+// ================== START SERVER AFTER DB IS CONNECTED ==================
 const PORT = process.env.PORT || 3000;
 
 (async () => {
-  console.log("Waiting for database connection before starting server...");
+  console.log("Connecting to database...");
 
-  while (!db) {
-    await new Promise(resolve => setTimeout(resolve, 100));
+  await connectToDatabase(); // One-time connect
+
+  if (!db) {
+    console.error("Failed to connect to database. Server not starting.");
+    process.exit(1);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
