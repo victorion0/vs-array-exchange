@@ -23,8 +23,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// ================= Database (UPDATED BLOCK) =================
-let db;
+// ================= Database =================
+let db;  // GLOBAL
 
 (async () => {
   try {
@@ -41,9 +41,7 @@ let db;
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      ssl: {
-        rejectUnauthorized: false
-      }
+      ssl: { rejectUnauthorized: false }
     });
     
     const [result] = await db.query('SELECT 1 as test');
@@ -256,6 +254,22 @@ app.use((req, res) => {
 });
 console.log("Fallback 404 route registered");
 
-// ================= Start Server =================
+// ================= Start Server AFTER DB =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+
+(async () => {
+  try {
+    console.log('Waiting for DB...');
+    while (!db) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    console.log('DB ready! Starting server...');
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server LIVE on port ${PORT} — API READY!`);
+    });
+  } catch (err) {
+    console.error('Startup failed:', err);
+    process.exit(1);
+  }
+})();
