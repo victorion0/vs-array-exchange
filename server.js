@@ -13,13 +13,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// LOG ALL REQUESTS (CRITICAL FOR DEBUG)
-app.use((req, res, next) => {
-  console.log(`REQUEST: ${req.method} ${req.path}`);
-  next();
-});
-
-// Health Check (TEST THIS FIRST)
+// Health Check
 app.get('/', (req, res) => {
   console.log('Health check hit');
   res.json({ 
@@ -29,7 +23,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// Database with RAILWAY SSL + VALID OPTIONS
+// ================= Database (UPDATED BLOCK) =================
 let db;
 
 (async () => {
@@ -47,19 +41,16 @@ let db;
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      // NO INVALID OPTIONS — NO WARNINGS
-      // SSL for Railway public networking
       ssl: {
         rejectUnauthorized: false
       }
     });
     
-    // TEST DB WITH SIMPLE QUERY
     const [result] = await db.query('SELECT 1 as test');
     console.log('DB Test Query OK:', result[0].test);
-    console.log("✅ Database connected");
+    console.log("Database connected");
   } catch (err) {
-    console.error("❌ Database connection failed:", err.message);
+    console.error("Database connection failed:", err.message);
     process.exit(1);
   }
 })();
@@ -121,9 +112,9 @@ async function generateSummaryImage() {
 
     const outputPath = path.join(cacheDir, "summary.png");
     fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
-    console.log("✅ Summary image generated at cache/summary.png");
+    console.log("Summary image generated at cache/summary.png");
   } catch (err) {
-    console.error("❌ Error generating summary image:", err.message);
+    console.error("Error generating summary image:", err.message);
   }
 }
 
@@ -171,7 +162,7 @@ app.post("/countries/refresh", async (req, res) => {
     res.status(503).json({ error: "External data source unavailable", details: err.message });
   }
 });
-console.log("✅ /countries/refresh route registered");
+console.log("/countries/refresh route registered");
 
 app.get("/countries", async (req, res) => {
   try {
@@ -199,7 +190,7 @@ app.get("/countries", async (req, res) => {
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
-console.log("✅ /countries route registered");
+console.log("/countries route registered");
 
 app.get("/countries/:name", async (req, res) => {
   try {
@@ -215,7 +206,7 @@ app.get("/countries/:name", async (req, res) => {
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
-console.log("✅ /countries/:name route registered");
+console.log("/countries/:name route registered");
 
 app.delete("/countries/:name", async (req, res) => {
   try {
@@ -231,7 +222,7 @@ app.delete("/countries/:name", async (req, res) => {
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
-console.log("✅ DELETE /countries/:name route registered");
+console.log("DELETE /countries/:name route registered");
 
 app.get("/status", async (req, res) => {
   try {
@@ -248,7 +239,7 @@ app.get("/status", async (req, res) => {
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
-console.log("✅ /status route registered");
+console.log("/status route registered");
 
 app.get("/countries/image", (req, res) => {
   const imagePath = path.join(process.cwd(), "cache", "summary.png");
@@ -258,13 +249,13 @@ app.get("/countries/image", (req, res) => {
     res.status(404).json({ error: "Summary image not found. Run /countries/refresh first." });
   }
 });
-console.log("✅ /countries/image route registered");
+console.log("/countries/image route registered");
 
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
 });
-console.log("✅ Fallback 404 route registered");
+console.log("Fallback 404 route registered");
 
-// Start Server
+// ================= Start Server =================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
